@@ -2,7 +2,10 @@
 
 **Senior AI & Data Platform Architect**
 
-> _"Make the right way easy and the wrong way hard."_
+> _Make the right way easy_
+> 
+> _and the wrong way hard._
+
 
 Designing and building real-time, continuously maintained data and knowledge systems that power AI applications at enterprise scale.
 
