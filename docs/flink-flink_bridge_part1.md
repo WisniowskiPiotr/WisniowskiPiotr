@@ -4,7 +4,7 @@
 
 * A Flink watermark is a promise about event-time progress — and it is **lost at the transport boundary**.
 * Downstream jobs today re-estimate it from observed data using an out-of-orderness heuristic, adding **latency** and **imprecision** even when the upstream job had exact knowledge.
-* FLIP-467 and DataStream V2 give Flink the explicit mechanism to *carry and emit* progress — but they do not solve how a source connector proves that all covered data actually crossed the transport.
+* FLIP-467 and DataStream V2 give Flink the explicit mechanism to *carry and emit* progress — but they do not solve how the source connector in the downstream job proves that all covered data actually crossed the transport.
 * The missing piece is a **transport cut** — a protocol connecting three things: the event-time boundary, the data it covers, and proof that the covered data crossed the transport.
 
 Part 2 looks at how other streaming engines generalized this problem; Part 3 proposes the exact protocol.
@@ -60,7 +60,7 @@ Now Job B is estimating something that Job A already knew.
 
 The goal of this article is therefore specific:
 
-> **Build a Flink-to-Flink bridge through a durable transport that preserves exact event-time watermarks instead of reconstructing them heuristically at the downstream source.**
+> **Build a Flink-to-Flink bridge through a durable transport that preserves exact event-time watermarks instead of reconstructing them heuristically at the downstream source node.**
 
 Kafka, Pulsar, Fluss, and Pub/Sub are examples of the transport boundary. The underlying problem is independent of the particular system.
 
@@ -113,7 +113,7 @@ bound = 5 minutes
 watermark = 11:55
 ```
 
-But the 5-minute bound is an assumption. If the source can actually prove that no older event will ever appear, a lateness bound throws away information.
+But the 5-minute bound is an assumption. If the upstream system can actually prove that no older event will ever appear, a lateness bound throws away information.
 
 That is the case we care about.
 
@@ -261,7 +261,7 @@ It said nothing about records that were already in flight.
 So:
 
 $$
-\text{source watermark} \neq \text{safe downstream watermark}
+\text{upstream watermark} \neq \text{safe downstream watermark}
 $$
 
 unless the transport provides an additional guarantee.
@@ -272,12 +272,12 @@ unless the transport provides an additional guarantee.
 
 To safely propagate the watermark, Job B needs two facts:
 
-### Source completeness
+### Upstream completeness
 
 Job A has established:
 
 $$
-\text{No future source event has timestamp} \le T
+\text{No future upstream event has timestamp} \le T
 $$
 
 ### Transport completeness
@@ -303,7 +303,7 @@ Job B needs:
     no future data <= T
 ```
 
-The source watermark solves the first statement.
+The upstream watermark solves the first statement.
 
 The transport must solve the second.
 
@@ -349,7 +349,7 @@ emitWatermark(Watermark watermark)
 
 and documents it specifically as the mechanism for sending a watermark from a DataStream V2 source.
 
-So a bridge source can conceptually do:
+So the bridge's source node (in Job B) can conceptually do:
 
 ```text
 external transport
@@ -385,11 +385,11 @@ That is a property of the external transport and of the protocol the two jobs ru
 
 ---
 
-# 11. The sink has to write the proof, not just see the watermark
+# 11. The sink node has to write the proof, not just see the watermark
 
-The bridge has a write side and a read side. On the read side, the source must convince itself that covered data crossed the transport. On the write side, the sink must leave behind the evidence that makes that proof possible. Neither half is Flink's business; both are the protocol's.
+The bridge has a write side and a read side. On the read side, the source node in the downstream system must convince itself that covered data crossed the transport. On the write side, the sink node in the upstream system must leave behind the evidence that makes that proof possible. Neither half is Flink's business; both are the protocol's.
 
-FLIP-167 proposed adding watermark handling to the Sink API, driven by multi-stage pipelines: one job's watermark seeding the next job's source watermark. It also raised what a sink could *do* with the watermark, such as flushing buffered data.
+FLIP-167 proposed adding watermark handling to the Sink API, driven by multi-stage pipelines: one job's watermark seeding the next job's source watermark. It also raised what a sink node could *do* with the watermark, such as flushing buffered data.
 
 Seeing the watermark is the easy part. Binding it to the data is the hard part:
 
@@ -413,7 +413,7 @@ Flink Job A
           Flink Job B
 ```
 
-The sink has to write the records *and* the progress assertion onto the transport so that a later reader can reconstruct "everything up to T has crossed" — the transport cut from Section 7, viewed from the write side. If the sink cannot express that binding, the source has no evidence to build on, and it falls back to the guesswork of Section 2.
+The sink node has to write the records *and* the progress assertion onto the transport so that the downstream system can reconstruct "everything up to T has crossed" — the transport cut from Section 7, viewed from the write side. If the sink node cannot express that binding, the downstream source node has no evidence to build on, and it falls back to the guesswork of Section 2.
 
 ---
 
@@ -468,11 +468,11 @@ FLIP-467 and DataStream V2 make the progress mechanism more general and more exp
 
 But a Flink-to-Flink bridge across Kafka, Pulsar, Pub/Sub, Fluss, or another external transport adds a problem that is not solved merely by forwarding a watermark value:
 
-> **How does the downstream source know that all data covered by the watermark has crossed an unordered transport?**
+> **How does the downstream system know that all data covered by the watermark has crossed an unordered transport?**
 
 There are other streaming architectures that approach this question differently.
 
-Apache Beam/Dataflow treats watermarks and source progress as part of a broader execution model for unbounded data. Timely Dataflow and Differential Dataflow go further and make distributed progress tracking a first-class concept.
+Apache Beam and its managed runner GCP Dataflow treat watermarks and source progress as part of a broader execution model for unbounded data. Differential Dataflow goes further and makes distributed progress tracking a first-class concept.
 
 Those approaches are useful because they let us ask a different question:
 
