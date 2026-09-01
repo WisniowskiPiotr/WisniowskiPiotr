@@ -100,6 +100,6 @@ Designing and building real-time, continuously maintained data and knowledge sys
 
 **Links:**
 
-[Flink-Flink streamming bridge part 1](./docs/flink-flink%20bridge%20part1.md)
+[Flink-Flink streamming bridge part 1](https://wisniowskipiotr.github.io/WisniowskiPiotr/flink-flink_bridge_part1)
 
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-0077B5?style=for-the-badge&logo=linkedin&logoColor=white)](https://linkedin.com/in/piotr-wi%C5%9Bniowski-898392aa)
